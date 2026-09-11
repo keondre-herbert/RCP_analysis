@@ -11,6 +11,7 @@ from datetime import datetime
 from RCP_analysis.python.functions.params_loading import load_experiment_params 
 import os
 import json
+from typing import Callable
 
 SESSIONS_TO_RUN = [
     # "NRR_RW035",
@@ -243,7 +244,19 @@ def _get_location_for_session(data_root: str, session: str) -> str:
     return location
 
 
-def run_scripts(base_dir: Path, scripts_folder: Path):
+def run_scripts(
+        base_dir: Path,
+        scripts_folder: Path,
+        sessions: list[str] | None = None,
+        scripts: list[str] | None = None,
+        process_only: list[int] | None = None,
+        log: Callable[[str], None] = print
+        ) -> dict[str, bool]:  
+
+    sessions = SESSIONS_TO_RUN if sessions is None else sessions
+    scripts = SCRIPTS if scripts is None else scripts
+    process_only = PROCESS_ONLY if process_only is None else process_only
+    
     params_path = base_dir / "config" / "params.yaml"
 
     if not params_path.exists():
@@ -253,14 +266,16 @@ def run_scripts(base_dir: Path, scripts_folder: Path):
     PARAMS = load_experiment_params(params_path, repo_root=base_dir, first_run=True)
     data_root = PARAMS.data_root
 
-    print("\nRunning Across Sessions = RAS")
-    print(f"{'=' * 60}")
+    log(f"\nRunning Across Sessions = RAS")
+    log(f"{'=' * 60}\n")
 
-    for session in SESSIONS_TO_RUN:
+    results={}
 
-        print(f"\n{'=' * 60}")
-        print(f"[RAS] Processing session: {session}")
-        print(f"{'=' * 60}")
+    for session in sessions:
+
+        log(f"\n{'=' * 60}")
+        log(f"[RAS] Processing session: {session}")
+        log(f"{'=' * 60}")
 
         # Look up this session's location without modifying "Process Session?"
         location = _get_location_for_session(data_root, session)
@@ -270,19 +285,23 @@ def run_scripts(base_dir: Path, scripts_folder: Path):
         env = os.environ.copy()
         env["RCP_SESSION"] = session
         env["RCP_LOCATION"] = location
-        env["RCP_PROCESS_ONLY"] = json.dumps(PROCESS_ONLY)
+        env["RCP_PROCESS_ONLY"] = json.dumps(process_only)
 
-        print(f"[RAS] Session context: RCP_SESSION={session}, RCP_LOCATION={location}, RCP_PROCESS_ONLY={PROCESS_ONLY}")
+        log(
+            f"[RAS] Session context: RCP_SESSION={session}, "
+            f"RCP_LOCATION={location}, RCP_PROCESS_ONLY={process_only}"
+        )
 
         # Run all scripts for this session
-        for script in SCRIPTS:
+        for script in scripts:
             script_path = scripts_folder / script
 
             if not script_path.exists():
-                print(f"[RAS: ERROR] Script not found: {script_path}")
+                log(f"[RAS: ERROR] Script not found: {script_path}")
+                results[session] = False
                 break
 
-            print(f"\n[RAS] Running {script_path}\n")
+            log(f"\n[RAS] Running {script_path}\n")
 
             status_column = SCRIPT_STATUS_COLUMNS.get(Path(script).name)
 
@@ -305,7 +324,8 @@ def run_scripts(base_dir: Path, scripts_folder: Path):
                     )
 
             except subprocess.CalledProcessError as e:
-                print(f"[RAS: ERROR] Script failed for {session} with exit code {e.returncode}")
+                log(f"[RAS: ERROR] Script failed for {session} with exit code {e.returncode}")
+                results[session] = False
 
                 # If this script has a corresponding CSV status column, write FAIL
                 if status_column is not None:
@@ -316,14 +336,16 @@ def run_scripts(base_dir: Path, scripts_folder: Path):
                         value="FAIL",
                     )
 
-                print("[RAS] Skipping to next session...")
+                log(f"[RAS] Skipping to next session...")
                 break
         else:
-            print(f"\n[RAS: SUCCESS] Completed all scripts for {session}")
+            log(f"\n[RAS: SUCCESS] Completed all scripts for {session}")
+            results[session] = True
 
-    print(f"\n{'=' * 60}")
-    print("[RAS] All sessions completed!")
-    print(f"{'=' * 60}")
+    log(f"\n{'=' * 60}")
+    log(f"[RAS] All sessions completed!")
+    log(f"{'=' * 60}")
+    return results
 
 
 def main():
