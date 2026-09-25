@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Literal
 
 from RCP_analysis.python.functions.pipeline_hierarchy import (
@@ -50,7 +49,6 @@ class RunRequest:
     ua_variant: Literal["ssmf", "mf"] = "ssmf"
     policy: Policy = "needed"
     on_failure: Literal["skip_session", "stop_run"] = "skip_session"
-    output_root: Path | None = None
 
 
 @dataclass
