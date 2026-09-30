@@ -1,0 +1,177 @@
+/* VELES stylesheet. @name tokens are replaced with the colours in veles/ui/theme.py (SPEC §7). */
+
+QMainWindow, QWidget#Page {
+    background: @ground;
+}
+
+QLabel {
+    color: @ink;
+}
+
+QLabel[mono="true"] {
+    font-family: "@mono";
+}
+
+QLabel[role="muted"] {
+    color: @muted;
+}
+
+QLabel[role="section"] {
+    font-family: "@mono";
+    color: @muted;
+    font-size: 13px;
+}
+
+QLabel[role="hero"] {
+    font-size: 72px;
+    font-weight: bold;
+}
+
+QLabel[role="version"] {
+    font-family: "@mono";
+    color: @muted;
+    font-size: 17px;
+}
+
+QLabel[role="lead"] {
+    font-size: 18px;
+}
+
+QLabel[role="title"] {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+/* --- Top bars --- */
+
+QWidget#TopBar, QWidget#WizardTop, QWidget#Stepper, QWidget#Footer {
+    background: @surface;
+}
+
+QWidget#TopBar, QWidget#WizardTop, QWidget#Stepper {
+    border-bottom: 1px solid @line;
+}
+
+QWidget#Footer {
+    border-top: 1px solid @line;
+}
+
+QLabel#Logo {
+    background: @subtle;
+    border: 1px dashed @line;
+    border-radius: 6px;
+}
+
+QLabel#AppName {
+    font-size: 17px;
+    font-weight: bold;
+}
+
+QLabel#WizardTitle {
+    font-size: 17px;
+}
+
+QFrame#VDivider {
+    background: @line;
+}
+
+QLabel#RepoPath {
+    font-family: "@mono";
+    color: @muted;
+}
+
+/* --- Buttons --- */
+
+QPushButton {
+    background: @surface;
+    color: @ink;
+    border: 1px solid @line;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 14px;
+}
+
+QPushButton:hover {
+    background: @subtle;
+}
+
+QPushButton:disabled {
+    color: @faint;
+    border-color: @divider;
+}
+
+QPushButton[role="primary"] {
+    background: @ink;
+    color: @surface;
+    border-color: @ink;
+}
+
+QPushButton[role="primary"]:hover {
+    background: @ink_hover;
+}
+
+QPushButton[role="primary"]:disabled {
+    background: @faint;
+    border-color: @faint;
+}
+
+QPushButton[role="tab"] {
+    background: transparent;
+    color: @muted;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 22px 2px 20px 2px;
+    font-size: 15px;
+}
+
+QPushButton[role="tab"]:hover {
+    color: @ink;
+}
+
+QPushButton[role="tab"]:checked {
+    color: @ink;
+    border-bottom-color: @ink;
+}
+
+/* --- Wizard stepper: one button per step; the 4px top border is the progress bar --- */
+
+QPushButton[role="step"] {
+    background: transparent;
+    border: none;
+    border-top: 4px solid @divider;
+    border-radius: 0;
+    padding: 12px 0 0 0;
+}
+
+QPushButton[role="step"][state="current"] {
+    border-top-color: @ink;
+}
+
+QPushButton[role="step"][state="done"] {
+    border-top-color: @faint;
+}
+
+QLabel[role="step-number"] {
+    font-family: "@mono";
+    color: @faint;
+    font-size: 14px;
+}
+
+QLabel[role="step-label"] {
+    color: @faint;
+    font-size: 17px;
+}
+
+QLabel[role="step-number"][state="current"], QLabel[role="step-label"][state="current"],
+QLabel[role="step-number"][state="done"], QLabel[role="step-label"][state="done"] {
+    color: @ink;
+}
+
+/* --- Panels --- */
+
+QFrame[role="panel"] {
+    background: @surface;
+    border: 1px solid @line;
+    border-radius: 10px;
+}
