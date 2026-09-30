@@ -10,7 +10,9 @@ from veles.planner import (
     is_applicable,
     stale_reasons,
 )
-from RCP_analysis.python.functions.pipeline_hierarchy import COLUMN_DEPENDENCIES
+from veles import paths
+
+COLUMN_DEPENDENCIES = paths.hierarchy().COLUMN_DEPENDENCIES
 
 S = CellState
 TS = "09/01/2026 10:00:00"

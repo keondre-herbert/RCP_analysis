@@ -4,11 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
-from RCP_analysis.python.functions.pipeline_hierarchy import (
-    COLUMN_DEPENDENCIES,
-    get_all_ancestor_columns,
-    parse_status_timestamp,
-)
+from veles import paths
 from veles.data import Session
 
 Policy = Literal["needed", "all", "none"]
@@ -59,16 +55,18 @@ class Plan:
 
 
 def close_and_order_steps(targets: list[str]) -> list[str]:
-    unknown = [t for t in targets if t not in COLUMN_DEPENDENCIES]
+    h = paths.hierarchy()
+    deps = h.COLUMN_DEPENDENCIES
+    unknown = [t for t in targets if t not in deps]
     if unknown:
         raise ValueError(f"Unknown pipeline step(s): {unknown}")
 
     needed: set[str] = set(targets)
     for t in targets:
-        needed.update(get_all_ancestor_columns(t))
+        needed.update(h.get_all_ancestor_columns(t))
 
-    catalog_index = {name: i for i, name in enumerate(COLUMN_DEPENDENCIES)}
-    waiting_on = {n: {d for d in COLUMN_DEPENDENCIES[n] if d in needed} for n in needed}
+    catalog_index = {name: i for i, name in enumerate(deps)}
+    waiting_on = {n: {d for d in deps[n] if d in needed} for n in needed}
 
     ordered: list[str] = []
     ready = [n for n, deps in waiting_on.items() if not deps]
@@ -88,17 +86,20 @@ def close_and_order_steps(targets: list[str]) -> list[str]:
 
 
 def is_applicable(step: str, session: Session) -> bool:
+    if step in session.unavailable_steps:
+        return False
     if step == "VOG":
         return any(c.values.get("VOG_File", "").strip() for c in session.conditions)
     return True
 
 
 def stale_reasons(step: str, session: Session) -> list[str]:
+    h = paths.hierarchy()
     reasons: list[str] = []
-    step_dt = parse_status_timestamp(session.status.get(step, ""))
+    step_dt = h.parse_status_timestamp(session.status.get(step, ""))
     if step_dt is not None:
-        for parent in COLUMN_DEPENDENCIES.get(step, []):
-            parent_dt = parse_status_timestamp(session.status.get(parent, ""))
+        for parent in h.COLUMN_DEPENDENCIES.get(step, []):
+            parent_dt = h.parse_status_timestamp(session.status.get(parent, ""))
             if parent_dt is not None and (parent_dt - step_dt).total_seconds() > STALE_TOLERANCE_S:
                 reasons.append(f"'{parent}' ran after '{step}' ({parent_dt:%m/%d/%Y %H:%M:%S})")
     if step in session.stale_file_inputs:
@@ -162,7 +163,7 @@ def build_plan(request: RunRequest, sessions: dict[str, Session]) -> Plan:
                 is_applicable=is_applicable(step, session),
                 status_value=status_value,
                 is_stale=bool(reasons),
-                upstream_ran=any(a in ran for a in get_all_ancestor_columns(step)),
+                upstream_ran=any(a in ran for a in paths.hierarchy().get_all_ancestor_columns(step)),
                 policy=request.policy,
             )
             cells[(name, step)] = state
