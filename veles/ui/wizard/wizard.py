@@ -160,6 +160,33 @@ class WizardView(QWidget):
 
         index may be -1 (Back on the first step) or len(STEPS) (Next on the last step).
         """
-        # TODO(human)
+
+        # Leave if index is -1
+        if index < 0:
+            self.cancelled.emit()
+            return
+        
+        # Start run on last step
+        if index >= len(STEPS):
+            self.start_requested.emit()
+            return
+        
+        # Ignore future steps
+        if index > self.furthest + 1:
+            return
+
+        # Show us where we are:
         self.current = index
+        self.furthest = max(self.furthest, index)
+
+        # Show a page
         self.stack.setCurrentIndex(index)
+
+        # Color a stepper
+        if self.current: 
+            for i, button in enumerate(self.step_buttons):
+                #pick "current", "done" or "todo" for button i, then:
+                
+                #button.set_state
+
+        

@@ -40,7 +40,7 @@ The wizard has its own header (VELES · New run · summary · Cancel) and a 5-st
 - **Recent runs:** last 5 runs (id, animal, sessions, scripts, started, duration, status).
 - **Data locations** panel:
   - Input data root: from `config/params.yaml` (+ `machines.yaml`), shown as `…\<animal>`, with a Browse button.
-  - Output folder: default `<data_root>\results`. A checkbox allows a custom folder (input + Browse, disabled until unticked).
+  - Output folder: read-only `<data_root>\<session>\results`. Scripts hard-code this in `config_loading.py`, so there's no custom folder option (decided 2026-09-25).
   - Run logs folder: `<repo>\logs`.
   - Checks shown as pills: input folders `Intan`, `Blackrock`, `Video`, `Metadata`, `Impedances` exist; `data_status_reaching.csv` found; number of sessions with a metadata CSV; CUDA available + conda env name.
 - **Version history:** from git tags (version, one-line change, date).
@@ -133,7 +133,6 @@ class RunRequest:
     ua_variant: Literal["ssmf", "mf"] = "ssmf"
     policy: Literal["needed", "all", "none"] = "needed"
     on_failure: Literal["skip_session", "stop_run"] = "skip_session"
-    output_root: Path | None = None    # None -> <data_root>/results
 
 class CellState(Enum):
     RUN, MISSING, STALE, FAILED, RERUN, SKIP, NA, SESSION_SKIPPED
@@ -155,7 +154,7 @@ Keep `SCRIPT_STATUS_COLUMNS` and `COLUMN_DEPENDENCIES` in `pipeline_hierarchy.py
 
 | Change | Why |
 |---|---|
-| Add `"plot_complete_shaded_BT.py": "plot_complete_shaded"` with dependency `["extract_peri"]` | Documented "Peri-Stim Firing Rate Plots" step; currently runs with no checks |
+| ~~Add `plot_complete_shaded_BT.py`~~ — deferred | The script isn't in the repo (only `docs/source/steps/analysis/plot_complete_shaded.rst`). Add `"plot_complete_shaded": ["extract_peri"]` when it's committed |
 | `extract_peri` depends on `["make_aligned"]` (unchanged) + **file input** `config/manual_trial_remove.csv` | `compute_shifts` is already an indirect ancestor via `UA_BR_analysis`/`make_aligned`; decided 2026-09-24 to leave it out as a direct edge — no functional difference, avoids a redundant edge in the map |
 | `manual_inspection` (inspect_kinematics) stays `["extract_peri"]` but is flagged `manual=True` | It's a human curation step (see §5.4) |
 | Add `plot_firing_rates.py` and `plot_bin_counts_per_target.py` to the script catalog | Already in the map; just not selectable yet (see §10 #6) |
@@ -197,7 +196,8 @@ Input: `RunRequest`, sessions, status rows, file mtimes. Output: `Plan`. Must be
 ### 5.4 Manual curation loop
 Order: extract_peri → inspect_kinematics (plots) → human edits `config/manual_trial_remove.csv` → extract_peri reruns → downstream reruns.
 - A run that includes inspect_kinematics ends as **Needs review**.
-- The CSV is shared across sessions. Compare only **that session's rows** (by content hash or last-edit time), otherwise one edit marks every session stale (**OPEN**: CSV columns).
+- The CSV is shared across sessions. Compare only **that session's rows**, otherwise one edit marks every session stale. Columns: `intan_filename, br_idx, trials_to_drop, reason`; `intan_filename` starts with the session name (e.g. `NRR_RW011_251203`).
+- DECISION (2026-09-25): fingerprint. After `extract_peri` succeeds, the runner writes a hash of that session's rows to `<session>/results/checkpoints/PeriStim/manual_trial_remove.sha256`. The data layer recomputes it; a mismatch puts `extract_peri` in `Session.stale_file_inputs`. No saved fingerprint (ran before VELES) → one "can't check" warning, not stale.
 
 ---
 
@@ -282,22 +282,21 @@ Each milestone ends with: tests pass, app launches, commit.
 4. Output file patterns for per-BR steps other than extract_peri / inspect_kinematics.
   ANS: check the codebase
 5. Do analysis scripts take a peri-stim category (stim/control reaches, target A/B, at_rest, Grasp, IMU, continuous_stim)? If so, the Scripts step needs a category filter.
-  ANS: No category argument. Checked `plot_peri_stim_raster.py`: it globs the whole monkey's
-  `PeriStim` output (`PERI_ROOT.rglob("peristim__*.npz")`, not scoped to one session) and filters
-  by one global BR-index list read from `config/params.yaml` (`PARAMS.preprocessing.process_only`,
-  line 12 / used line 1398). There is no per-session BR dict today — this is the exact global-vs-
-  per-session gap Goal #3 is meant to fix, but the scripts themselves aren't session-scoped.
-  DECISION (2026-09-24): per-session Condition filtering (§2.6) applies only through `extract_peri`
-  and earlier. Analysis-script steps (raster, group responses, overlays, plateau, RSA, shaded_BT,
-  peak_csv_summaries, plot_FRs, plot_bin_counts) are **out of scope for per-session condition
-  selection** — they run over whatever the selected sessions already produced, with no per-session
-  BR filter in the Plan grid. Revisit if/when those scripts are changed to accept a per-session
-  scope.
+  ANS: No category argument. Scripts ARE session-scoped: `VELES.py` runs each session separately
+  with `RCP_LOCATION` and `RCP_PROCESS_ONLY` set (lines 278-279), and `config_loading.py` builds
+  `OUT_BASE = <data_root>/<Location>/results`, so `PERI_ROOT.rglob(...)` sees one session only.
+  (The 2026-09-24 note said the opposite; that was wrong.)
+  DECISION (2026-09-25): per-session Condition selection applies to every step, passed as that
+  session's `RCP_PROCESS_ONLY`. Scripts that ignore `process_only` always process all of the
+  session's conditions, and the Scripts step tags them **all conditions**: OCR, DLC, VOG,
+  inspect_kinematics, lfp_bands, RSA, plateau, peak_csv_summaries, plot_lfp_cleaner,
+  combine_UA_gifs.
 6. `plot_firing_rates.py`, `plot_bin_counts_per_target.py`: add to the catalog or remove from the map?
   ANS: add to catolog. Note: already mapped in `pipeline_hierarchy.py` (`plot_FRs`, `plot_bin_counts`),
   no hierarchy.py change needed, just add to the wizard catalog. The day-one script catalog is
   `VELES_gui.py:SCRIPT_CATALOG` (lines 103-124) — Preprocessing (11, incl. `analyze_lfp_bands.py`),
-  Analysis (7, incl. `plot_complete_shaded_BT.py`), Nikita Scripts (2). `VELES.py`'s `SCRIPTS` list
+  Analysis (6 — `plot_complete_shaded_BT.py` is listed there but the file isn't in the repo, so it's
+  left out until it's committed), Nikita Scripts (2). `VELES.py`'s `SCRIPTS` list
   is just one person's run config (mostly commented out) and is NOT the catalog source.
 7. Multiple copies of VELES at once: add a lock file on `data_status_reaching.csv`?
   ANS: Yes. DECISION (2026-09-24): advisory lock file `data_status_reaching.csv.lock` (pid + start
