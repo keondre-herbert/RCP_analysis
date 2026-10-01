@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import os
+import socket
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -47,8 +50,16 @@ def trial_remove_csv_path() -> Path:
     return paths.repo_root() / "config" / "manual_trial_remove.csv"
 
 
+class DataRootError(Exception):
+    pass
+
+
 def animal_root(animal: str) -> Path:
     config = paths.repo_root() / "config"
+    machines = (yaml.safe_load((config / "machines.yaml").read_text()) or {}).get("machines") or {}
+    hostname = socket.gethostname()
+    if hostname not in machines:
+        raise DataRootError(f"This computer ({hostname}) has no entry in config/machines.yaml")
     relative = yaml.safe_load((config / "params.yaml").read_text())["paths"]["data_root"]
     return Path(paths.params_loading()._resolve_data_root(config / "machines.yaml", relative)) / animal
 
@@ -94,14 +105,26 @@ def load_conditions(metadata_csv: Path) -> list[Condition]:
     return conditions
 
 
+def _list_dir(folder: Path) -> list[tuple[str, bool]]:
+    """(name, is_dir) for each entry, from one directory listing; much faster than per-file stat on a network share."""
+    try:
+        with os.scandir(folder) as entries:
+            return [(e.name, e.is_dir()) for e in entries]
+    except FileNotFoundError:
+        return []
+
+
 def check_raw_files(root: Path, session: Session) -> tuple[list[str], set[str]]:
     """Return (notes about missing raw files, steps that can't run for this session)."""
     loc = root / session.location
-    ns5 = [p.stem for p in (loc / "Blackrock").rglob("*.ns5")]
-    ns6 = [p.stem for p in (loc / "Blackrock").rglob("*.ns6")]
-    intan_count = sum(1 for p in (loc / "Intan").glob("*") if p.is_dir())
-    video_names = [p.name for p in (loc / "Video").rglob("*") if p.is_file()]
-    vog_names = [p.name for p in (loc / "VOG").glob("*") if p.is_file()]
+    blackrock = _list_dir(loc / "Blackrock")
+    ns5 = [name[:-4] for name, is_dir in blackrock if not is_dir and name.endswith(".ns5")]
+    ns6 = [name[:-4] for name, is_dir in blackrock if not is_dir and name.endswith(".ns6")]
+    intan_count = sum(1 for _, is_dir in _list_dir(loc / "Intan") if is_dir)
+    # Raw .avi files sit in Video/ (older sessions) or Raw Video/; DLC CSVs in Video/DLC. Any of them proves the video.
+    video_names = [name for folder in (loc / "Video", loc / "Raw Video", loc / "Video" / "DLC")
+                   for name, is_dir in _list_dir(folder) if not is_dir]
+    vog_names = [name for name, is_dir in _list_dir(loc / "VOG") if not is_dir]
 
     notes: list[str] = []
     ua_missing: list[str] = []
@@ -120,7 +143,7 @@ def check_raw_files(root: Path, session: Session) -> tuple[list[str], set[str]]:
 
         video = _as_index(c.values.get("Video_File", ""))
         if video is not None and not any(f"_{video:03d}_" in n for n in video_names):
-            notes.append(f"BR_File {c.br_file}: Video_File {video} not found in Video/")
+            notes.append(f"BR_File {c.br_file}: Video_File {video} not found in Video/, Raw Video/ or Video/DLC/")
 
         vog = _as_index(c.values.get("VOG_File", ""))
         if vog is not None:
@@ -183,16 +206,17 @@ def load_sessions(root: Path, trial_remove_csv: Path | None = None) -> dict[str,
     if not status_csv.exists():
         raise FileNotFoundError(f"{STATUS_CSV_NAME} not found: {status_csv}")
 
-    sessions: dict[str, Session] = {}
-    for row in _read_csv(status_csv):
+    steps = list(paths.hierarchy().COLUMN_DEPENDENCIES)
+
+    def load_one(row: dict[str, str]) -> Session | None:
         name = (row.get("Session") or "").strip()
         location = (row.get("Location") or "").strip()
         metadata_csv = root / location / "Metadata" / f"{name}_metadata.csv"
         if not name or not metadata_csv.exists():
-            continue
+            return None
 
         session = Session(name=name, location=location, conditions=load_conditions(metadata_csv))
-        for step in paths.hierarchy().COLUMN_DEPENDENCIES:
+        for step in steps:
             raw = (row.get(step) or "").strip()
             session.status[step] = clean_status(raw)
             if raw and not session.status[step] and raw.upper() != "NOT STARTED":
@@ -201,7 +225,12 @@ def load_sessions(root: Path, trial_remove_csv: Path | None = None) -> dict[str,
         raw_notes, session.unavailable_steps = check_raw_files(root, session)
         session.stale_file_inputs, trial_notes = check_trial_remove(root, session, trial_remove_csv)
         session.notes += raw_notes + trial_notes
-        sessions[name] = session
+        return session
+
+    # Each session is a handful of independent network reads, so overlap them.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        loaded = list(pool.map(load_one, _read_csv(status_csv)))
+    sessions = {s.name: s for s in loaded if s is not None}
     return sessions
 
 

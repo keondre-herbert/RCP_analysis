@@ -175,3 +175,114 @@ QFrame[role="panel"] {
     border: 1px solid @line;
     border-radius: 10px;
 }
+
+QLabel[role="h2"] {
+    font-size: 21px;
+    font-weight: bold;
+}
+
+QLabel[role="field"] {
+    font-family: "@mono";
+    color: @muted;
+    font-size: 13px;
+}
+
+QLabel[role="path"] {
+    font-family: "@mono";
+    color: @muted;
+    font-size: 13px;
+}
+
+QLabel[role="error"] {
+    color: @fail_fg;
+}
+
+QFrame#HLine {
+    background: @divider;
+}
+
+/* --- Pills: '■ 21 sessions' --- */
+
+QLabel[role="pill"] {
+    font-family: "@mono";
+    font-size: 13px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    background: @subtle;
+    color: @ink;
+}
+
+QLabel[role="pill"][kind="ink"] {
+    background: @ink;
+    color: @surface;
+}
+
+QLabel[role="pill"][kind="stale"] {
+    background: @stale_bg;
+    color: @stale_fg;
+}
+
+QLabel[role="pill"][kind="fail"] {
+    background: @fail_bg;
+    color: @fail_fg;
+}
+
+/* --- Animal cards --- */
+
+QFrame[role="card"] {
+    background: @surface;
+    border: 1px solid @line;
+    border-radius: 10px;
+}
+
+QFrame[role="card"][selected="true"] {
+    border: 2px solid @ink;
+}
+
+QFrame[role="card"][enabled="false"] QLabel {
+    color: @faint;
+}
+
+QLabel[role="card-title"] {
+    font-size: 26px;
+    font-weight: bold;
+}
+
+/* --- Inputs --- */
+
+QLineEdit, QPlainTextEdit, QComboBox {
+    background: @surface;
+    border: 1px solid @line;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 14px;
+    color: @ink;
+}
+
+QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {
+    border-color: @ink;
+}
+
+/* --- Tables --- */
+
+QTableView {
+    background: @surface;
+    border: none;
+    border-top: 1px solid @divider;
+    font-size: 14px;
+}
+
+QTableView::item {
+    border-bottom: 1px solid @divider;
+    padding-left: 6px;
+}
+
+QHeaderView::section {
+    background: @subtle;
+    color: @muted;
+    font-family: "@mono";
+    font-size: 12px;
+    border: none;
+    border-bottom: 1px solid @divider;
+    padding: 9px 6px;
+}

@@ -5,3 +5,5 @@ machines:
     data_root_prefix: "Y:/"
   keondre-pc: # Keondre
     data_root_prefix: "A:/" 
+  Keondres-MacBook-Air.local: # Keondre (Mac; key must match socket.gethostname())
+    data_root_prefix: "/Volumes/data/"

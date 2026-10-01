@@ -134,7 +134,7 @@ def test_missing_raw_files_are_noted(root, trial_csv):
     notes = load_sessions(root, trial_csv)[NAME].notes
     assert "BR_File 4: no Blackrock .ns5" in notes
     assert "BR_File 4: no Blackrock .ns6 (UA data)" in notes
-    assert "BR_File 4: Video_File 5 not found in Video/" in notes
+    assert "BR_File 4: Video_File 5 not found in Video/, Raw Video/ or Video/DLC/" in notes
     assert not any(n.startswith(("BR_File 2", "BR_File 3")) for n in notes)
 
 

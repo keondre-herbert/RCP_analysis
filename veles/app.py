@@ -5,12 +5,11 @@ import traceback
 from pathlib import Path
 
 from PyQt5.QtCore import QSettings, Qt
-from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from veles import paths
 from veles.ui.main_window import MainWindow
-from veles.ui.theme import UI_FONT, load_stylesheet
+from veles.ui.theme import apply_theme
 
 
 def show_error(exc_type, exc, tb) -> None:
@@ -74,13 +73,12 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setOrganizationName("RCP")
     app.setApplicationName("VELES")
-    app.setFont(QFont(UI_FONT, 10))
+    apply_theme(app)
     sys.excepthook = show_error
 
     if not resolve_locations(QSettings()):
         return 1
 
-    app.setStyleSheet(load_stylesheet())
     window = MainWindow(repo_path=str(paths.repo_root()))
     window.resize(1440, 900)
     window.show()

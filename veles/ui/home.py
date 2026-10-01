@@ -26,9 +26,12 @@ class HomePage(QWidget):
         version_label.setProperty("role", "version")
 
         lead = QLabel(
-            "Runs the RCP analysis pipeline on neural (Blackrock, Intan, Utah array) and behavioral "
-            "(DLC, VOG) data. Pick an animal, sessions and conditions, and VELES runs each script in "
-            "dependency order, rerunning anything that is missing or out of date."
+            "VELES - Versatile Electrophysiology and Limb-motion Evaluation Suite\n"
+            "Veles: a slavic deity of magic, knowledge, divination, and poetry, "
+            "providing wisdom and guidance to his shamans, governing the world outside "
+            "the fences of human dwellings.\n"
+            "Like the god Veles, may this app provide us a view into the unknown!\n" \
+            "Runs RCP analysis Pipeline"
         )
         lead.setProperty("role", "lead")
         lead.setWordWrap(True)

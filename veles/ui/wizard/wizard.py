@@ -13,13 +13,17 @@ from PyQt5.QtWidgets import (
 
 from veles.ui.header import make_logo
 from veles.ui.theme import restyle
+from veles.ui.wizard.animal import AnimalPage
+from veles.ui.wizard.base import StepPage
+from veles.ui.wizard.sessions import SessionsPage
+from veles.wizard_state import WizardState
 
 STEPS = ["Animal", "Sessions", "Conditions", "Scripts", "Review"]
 STEP_TITLES = [
     "Which animal?",
     "Which sessions?",
     "Which conditions?",
-    "What do you want to produce?",
+    "Which scripts?",
     "Review and start",
 ]
 
@@ -51,10 +55,9 @@ class StepButton(QPushButton):
         self.setCursor(Qt.PointingHandCursor if state == "done" else Qt.ArrowCursor)
 
 
-class PlaceholderStep(QWidget):
-    def __init__(self, title: str, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.setObjectName("Page")
+class PlaceholderStep(StepPage):
+    def __init__(self, state: WizardState, title: str, parent: QWidget | None = None):
+        super().__init__(state, parent)
         heading = QLabel(title)
         heading.setProperty("role", "title")
         note = QLabel("This step is built in Milestone 4.")
@@ -78,9 +81,16 @@ class WizardView(QWidget):
         self.current = 0   # index of the step on screen
         self.furthest = 0  # highest step reached so far; steps up to here count as visited
 
+        self.state = WizardState()
+        self.pages: list[StepPage] = [
+            AnimalPage(self.state),
+            SessionsPage(self.state),
+            *(PlaceholderStep(self.state, title) for title in STEP_TITLES[2:]),
+        ]
         self.stack = QStackedWidget()
-        for title in STEP_TITLES:
-            self.stack.addWidget(PlaceholderStep(title))
+        for page in self.pages:
+            page.changed.connect(self._on_page_changed)
+            self.stack.addWidget(page)
 
         self.step_buttons = [StepButton(i, label) for i, label in enumerate(STEPS)]
         for i, button in enumerate(self.step_buttons):
@@ -116,10 +126,12 @@ class WizardView(QWidget):
         divider.setFixedSize(1, 28)
         title = QLabel("New run")
         title.setObjectName("WizardTitle")
+        self.subtitle = QLabel("")
+        self.subtitle.setProperty("role", "muted")
         row = QHBoxLayout(bar)
         row.setContentsMargins(34, 14, 34, 14)
         row.setSpacing(18)
-        for widget in (make_logo(), name, divider, title):
+        for widget in (make_logo(), name, divider, title, self.subtitle):
             row.addWidget(widget)
         row.addStretch(1)
         row.addWidget(cancel)
@@ -153,7 +165,21 @@ class WizardView(QWidget):
         """Start a fresh run at step 1 with nothing visited."""
         self.current = 0
         self.furthest = 0
+        self.state.__dict__.update(WizardState().__dict__)  # same object, fresh contents: pages keep their reference
+        for page in self.pages:
+            page.reset()
         self.go_to_step(0)
+
+    def _on_page_changed(self) -> None:
+        """An edit on this step makes later steps stale: they must be visited again via Next."""
+        self.furthest = self.current
+        self.go_to_step(self.current)
+
+    def _refresh_footer(self) -> None:
+        page = self.pages[self.current]
+        self.next_button.setEnabled(page.is_complete())
+        self.summary.setText(page.summary())
+        self.subtitle.setText(self.state.subtitle(self.current))
 
     def go_to_step(self, index: int) -> None:
         """Show step `index`. Called by Next (current + 1), Back (current - 1) and stepper clicks.
@@ -171,8 +197,8 @@ class WizardView(QWidget):
             self.start_requested.emit()
             return
         
-        # Ignore future steps
-        if index > self.furthest + 1:
+        # Ignore steps not reached yet; the next step only once this one is complete
+        if index > self.furthest and not (index == self.current + 1 and self.pages[self.current].is_complete()):
             return
 
         # Show us where we are:
@@ -181,12 +207,14 @@ class WizardView(QWidget):
 
         # Show a page
         self.stack.setCurrentIndex(index)
+        self.pages[index].enter()
 
-        # Color a stepper
-        if self.current: 
-            for i, button in enumerate(self.step_buttons):
-                #pick "current", "done" or "todo" for button i, then:
-                
-                #button.set_state
+        # Color a stepper 
+        for i, button in enumerate(self.step_buttons):
+            button.set_state("current" if i == self.current else "done" if i <= self.furthest else "todo")
 
-        
+        # Button text
+        self.back_button.setText("Back to home" if index == 0 else "Back")
+        self.next_button.setText("Start run" if index == len(STEPS) - 1 else f"Next: {STEPS[index + 1]}")
+
+        self._refresh_footer()
